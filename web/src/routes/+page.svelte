@@ -6,6 +6,11 @@
 			v.string(),
 			v.minLength(3, 'mininum 3 characters required'),
 			v.maxLength(20, 'maximum 20 characters are allowed')
+		),
+		password: v.pipe(
+			v.string(),
+			v.minLength(8, 'enter atleast eight characters'),
+			v.maxLength(100, 'maximum length reached')
 		)
 	});
 </script>
@@ -26,7 +31,7 @@
 			if (f.valid) {
 				let res: Response | null;
 				try {
-					res = await fetch(to('/user?username=' + f.data.username));
+					res = await fetch(to('/user'), { method: 'post', body: JSON.stringify(f.data) });
 				} catch (error) {
 					toast.error('Error occoured while creating user');
 					console.error('User create error: ', error);
@@ -40,11 +45,16 @@
 					return;
 				}
 
-				const data = await res.json();
+				const data: { error: boolean; message: string } = await res.json();
+
+				if (data.error) {
+					toast.error(data.message);
+					return;
+				}
 
 				toast.success(`User ${f.data.username} created`);
 				localStorage.setItem('username', f.data.username);
-				goto('/stream/' + data.id);
+				await goto('/choice');
 			} else {
 				toast.error('Please fix the errors in the form.');
 			}
@@ -59,17 +69,33 @@
 	<div class="flex w-[80vw] flex-col items-center justify-center lg:w-[40vw]">
 		<form
 			method="POST"
-			class="flex w-2/3 flex-col justify-center space-y-6 rounded-lg border bg-primary-foreground p-5"
+			class="flex w-2/3 flex-col justify-center space-y-3 rounded-lg border bg-primary-foreground p-5"
 			use:enhance
 		>
 			<Form.Field {form} name="username">
 				<Form.Control>
 					{#snippet children({ props })}
 						<Form.Label>Username</Form.Label>
-						<Input {...props} bind:value={$formData.username} />
+						<Input placeholder="user1234" {...props} bind:value={$formData.username} />
 					{/snippet}
 				</Form.Control>
-				<Form.Description>This is your public display name.</Form.Description>
+				<Form.Description>This is your public display name</Form.Description>
+				<Form.FieldErrors />
+			</Form.Field>
+
+			<Form.Field {form} name="password">
+				<Form.Control>
+					{#snippet children({ props })}
+						<Form.Label>Password</Form.Label>
+						<Input
+							type="password"
+							placeholder="********"
+							{...props}
+							bind:value={$formData.password}
+						/>
+					{/snippet}
+				</Form.Control>
+				<Form.Description>At least eight characters</Form.Description>
 				<Form.FieldErrors />
 			</Form.Field>
 			<Form.Button>Submit</Form.Button>

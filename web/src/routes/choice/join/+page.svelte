@@ -4,12 +4,15 @@
 	import * as Resizable from '$lib/components/ui/resizable/index';
 	import { onMount } from 'svelte';
 
-	import * as signalR from '@microsoft/signalr';
-	import { to } from '$lib/utils';
+	import { toast } from 'svelte-sonner';
+	import { goto } from '$app/navigation';
+	import { getSignalRConnection } from '$lib/store';
 
-	let signalRConnection = new signalR.HubConnectionBuilder().withUrl(to('/stream')).build();
-
+	let username = $state('');
+	let streamID = $state<number | null>();
 	let cameraList = $state<MediaDeviceInfo[] | null>();
+
+	let signalRConnection = getSignalRConnection();
 
 	let localVideoRef: HTMLVideoElement | null = $state(null);
 	let remoteVideoRef: HTMLVideoElement | null = $state(null);
@@ -17,6 +20,19 @@
 	let rtcPeerConnection: RTCPeerConnection | null = $state(null);
 
 	onMount(async () => {
+		const localStorageUsername = localStorage.getItem('username');
+		if (!localStorageUsername) {
+			await goto('/');
+			return;
+		}
+
+		username = localStorageUsername;
+
+		signalRConnection.on('SetData::' + username, (id: number) => {
+			console.log('Recv any data?');
+			streamID = id;
+		});
+
 		const openMediaDevices = async (contraints?: MediaStreamConstraints) => {
 			return await navigator.mediaDevices.getUserMedia(contraints);
 		};
@@ -44,10 +60,27 @@
 	});
 
 	async function startStream() {
+		await signalRConnection.start();
+
 		const configuration = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 		rtcPeerConnection = new RTCPeerConnection(configuration);
+		const username = localStorage.getItem('username');
+		if (!username) {
+			toast.error('no user found');
+			return;
+		}
 
-		signalRConnection.invoke('start_stream', []);
+		const offer = await rtcPeerConnection.createOffer();
+
+		await rtcPeerConnection.setLocalDescription(offer);
+
+		await signalRConnection.invoke('StartStream', username, offer);
+
+		rtcPeerConnection.addEventListener('icecandidate', async (event) => {
+			if (event.candidate) {
+				await signalRConnection.invoke('NewIceCandidate', event.candidate);
+			}
+		});
 	}
 </script>
 
@@ -56,6 +89,14 @@
 	<Toggle />
 
 	<hr />
+	<h3 class=" rounded-lg border-2 bg-accent px-5 py-3 text-xl font-bold">
+		Hello, <span class="underline"> {username}</span>
+	</h3>
+	<Button class="text-md"
+		>Stream ID: <span class="animate-pulse font-bold"
+			>{streamID ? streamID : 'Start stream to get ID'}</span
+		></Button
+	>
 	<div class="flex w-full flex-col items-center justify-center">
 		<Resizable.PaneGroup direction="vertical" class="min-h-[50vh]  max-w-md rounded-lg border">
 			<Resizable.Pane defaultSize={50}>
@@ -72,7 +113,7 @@
 			<Resizable.Handle />
 		</Resizable.PaneGroup>
 		<div class="my-4 flex gap-10">
-			<Button class="items-center px-5 py-3">Start Stream</Button>
+			<Button class="items-center px-5 py-3" onclick={startStream}>Start Stream</Button>
 			<Button class="items-center px-5 py-3">End Stream</Button>
 		</div>
 	</div>

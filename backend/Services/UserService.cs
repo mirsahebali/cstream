@@ -1,61 +1,70 @@
 using Cstream.Models;
+using Cstream.Data;
 
 namespace Cstream.Services;
 
-public static class UserService
+public class UserService
 {
-    static List<User> Users { get; }
+    static List<User> Users { get; set; }
 
-    static UserService()
+    private static CstreamContext _context;
+
+    public UserService(CstreamContext context) { Users = new List<User> { }; _context = context; }
+
+    public List<User> GetAll => Users;
+
+    public User Get(string username)
     {
-        Users = new List<User> { };
+        User foundUser = _context.Users.FirstOrDefault(u => u.Username == username);
+
+        return foundUser;
     }
 
-    public static List<User> GetAll => Users;
-
-    public static User? Get(string username) => Users.FirstOrDefault(u => u.Username == username);
-
-    public static User? CreateUser(string username)
+    public async Task<User> CreateUser(string username, string password)
     {
-        User? foundUser = Users.FirstOrDefault(u => u.Username == username);
+        User foundUser = _context.Users.First(u => u.Username == username);
         if (foundUser != null)
         {
             Console.WriteLine("user " + username + " already exists");
             return null;
         }
 
-        User user = new User(username);
+        User user = new User(username, password);
 
-        Users.Add(user);
+        _context.Users.Add(user);
+        await _context.SaveChangesAsync();
 
         Console.WriteLine("Created user " + username);
         return user;
     }
 
-    public static void RemoveUser(string username)
+    public async Task<bool> RemoveUser(string username)
     {
-        User? foundUser = Users.Find(u => u.Username == username);
+        User foundUser = _context.Users.First(u => u.Username == username);
 
         if (foundUser == null)
         {
             Console.WriteLine("User " + username + " not found ");
+            return false;
+        }
+
+        _context.Users.Remove(foundUser);
+        await _context.SaveChangesAsync();
+        Console.WriteLine("User " + username + " removed ");
+        return true;
+    }
+
+    public void ApproveUser(User user, bool approve)
+    {
+        User foundUser = _context.Users.FirstOrDefault(u => u.Username == user.Username);
+        if (foundUser == null)
+        {
+            Console.WriteLine("user " + user.Username + " not found");
             return;
         }
 
-        Users.Remove(foundUser);
-        Console.WriteLine("User " + username + " removed ");
-    }
-
-    public static void ApproveUser(User user, bool approve)
-    {
-        User? foundUser = Users.FirstOrDefault(u => u.Username == user.Username);
-        if (foundUser != null)
-        {
-            user.Approved = approve;
-        }
-        else
-        {
-            Console.WriteLine("user " + user.Username + " not found");
-        }
+        user.Approved = approve;
+        int rowsChanged = _context.SaveChanges();
+        Console.WriteLine("Rows Modified: " + rowsChanged);
     }
 }

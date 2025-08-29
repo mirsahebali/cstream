@@ -17,3 +17,13 @@ export function randomNumber(max: number, min: number): number {
 }
 
 export const to = (url: string) => (import.meta.env.DEV ? 'http://localhost:5083' : '') + url;
+
+
+export const openMediaDevices = async (contraints?: MediaStreamConstraints) => {
+  return await navigator.mediaDevices.getUserMedia(contraints);
+};
+
+export const getConnectedDevices = async (type: MediaDeviceKind) => {
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  return devices.filter((device) => device.kind === type);
+};
